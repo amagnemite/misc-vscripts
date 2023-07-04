@@ -1,11 +1,20 @@
 //made by watermelon
 //replaces demo shield charge with a projectile shield
 
-local hasShield = false;
-local shield = null;
-local projShield = null;
-local shieldModelString = null;
-local terminateOnDeath = false;
+local scope = self.GetScriptScope();
+
+scope.hasShield <- false;
+scope.shield <- null;
+scope.projShield <- null;
+scope.shieldModelString <- null;
+scope.terminateOnDeath <- false;
+scope.cooldown <- 0;
+scope.totalHealth <- PERMANENT_SHIELD;
+scope.currentHealth <- totalHealth;
+scope.healthRegenIncrement <- 24; //arbitary number, needs to be based on every .1 s
+local firstRun = true;
+local lastShieldTime = Time();
+const REGEN_TIME = 3.0;
 
 while(shield = Entities.FindByClassname(shield, "tf_wearable_demoshield")) {
 	if(shield.GetOwner() == self) { //only need to find one entity
@@ -39,17 +48,14 @@ function UpgradeCheck(level) {
 		}
 	}
 	
-	AddThinkToEnt(self, "Think");
+	AddThinkToEnt(self, "NormalThink");
 }
 
 function RemoveUpgrade() { //separate func so it can also be called by the popfile
 	NetProps.SetPropString(self, "m_iszScriptThinkFunction", "");
 	AddThinkToEnt(self, null);
 	NetProps.SetPropBool(self, "m_Shared.m_bRageDraining", false);
-	if(shield.IsValid()) {
-		shield.RemoveAttribute("no_attack"); //safety
-	}
-	self.SetForcedTauntCam(0);
+	SetShieldState(false);
 	self.TerminateScriptScope();
 }
 
@@ -57,7 +63,7 @@ function SetTerminateOnDeath(val) {
 	terminateOnDeath = val;
 }
 
-function Think() {
+function NormalThink() {
 	if(terminateOnDeath) {
 		if(NetProps.GetPropInt(self, "m_lifeState") != 0) {
 			RemoveUpgrade();
@@ -68,13 +74,11 @@ function Think() {
 		RemoveUpgrade();
 	}
 
-	if(NetProps.GetPropInt(self, "m_nButtons") & Constants.FButtons.IN_ATTACK2) {
+	if(NetProps.GetPropInt(self, "m_nButtons") & IN_ATTACK2) {
 		NetProps.SetPropFloat(self, "m_Shared.m_flChargeMeter", 0); //prevents charge, if meter is full mini charges may occur
 		NetProps.SetPropFloat(self, "m_Shared.m_flRageMeter", 100);
 		
-		self.SetForcedTauntCam(1);
-		shield.AddAttribute("no_attack", 1, -1);
-		hasShield = true
+		SetShieldState(true);
 		
 		if(projShield == null || !projShield.IsValid()) { //only create a new shield if we don't have one
 			NetProps.SetPropBool(self, "m_Shared.m_bRageDraining", true); //needs to be true for no rage classes to use shield
@@ -82,7 +86,7 @@ function Think() {
 			projShield = SpawnEntityFromTable("entity_medigun_shield", {
 				//targetname = "shield"
 				teamnum = self.GetTeam()
-				skin = self.GetTeam() == Constants.ETFTeam.TF_TEAM_RED ? 0 : 1
+				skin = self.GetTeam() == TF_TEAM_RED ? 0 : 1
 			})
 			projShield.SetOwner(self)
 			
@@ -96,10 +100,47 @@ function Think() {
 			if(NetProps.GetPropFloat(self, "m_Shared.m_flRageMeter") > 2.5) {
 				NetProps.SetPropFloat(self, "m_Shared.m_flRageMeter", 2.5);
 			}
-			hasShield = false;
-			
-			self.SetForcedTauntCam(0);
-			shield.RemoveAttribute("no_attack");
+			SetShieldState(false);
+			lastShieldTime = Time();
 		}
+		
+		//if we have hp to regen and enough has passed to start regenerating
+		if(currentHealth != totalHealth && (Time() - lastShieldTime) >= REGEN_TIME) {
+			currentHealth = currentHealth + healthRegenIncrement > totalHealth ? totalHealth : currentHealth + healthRegenIncrement;
+			printl(currentHealth);
+		}
+	}
+}
+
+function BrokenShieldThink() {
+	if(firstRun) { //kill shield
+		NetProps.SetPropFloat(self, "m_Shared.m_flRageMeter", 0);
+		if(projShield.IsValid()) {
+			projShield.Kill();
+		}
+		EmitSoundOnClient("Breakable.Glass", self); //replace this with emitsoundex eventually
+		
+		SetShieldState(false);
+		firstRun = false;
+	}
+	else {
+		currentHealth = totalHealth;
+		firstRun = true;
+		AddThinkToEnt(self, "NormalThink");
+	}
+	
+	return cooldown - 0.1;
+}
+
+function SetShieldState(newState) {
+	hasShield = newState;
+	
+	if(hasShield) {
+		self.SetForcedTauntCam(1);
+		shield.AddAttribute("no_attack", 1, -1);
+	}
+	else {
+		self.SetForcedTauntCam(0);
+		shield.RemoveAttribute("no_attack");
 	}
 }
