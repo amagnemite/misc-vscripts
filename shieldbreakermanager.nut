@@ -1,3 +1,7 @@
+//manages damage for demomanm2shield instances
+//various globals and such
+//by watermelon
+
 foreach(a,b in Constants){foreach(k,v in b){if(!(k in getroottable())){getroottable()[k]<-v;}}} //takes all constant keyvals and puts them in global
 
 PrecacheScriptSound("Breakable.Glass");

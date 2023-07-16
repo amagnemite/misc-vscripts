@@ -52,8 +52,8 @@ function UpgradeCheck(level) {
 }
 
 function RemoveUpgrade() { //separate func so it can also be called by the popfile
-	NetProps.SetPropString(self, "m_iszScriptThinkFunction", "");
 	AddThinkToEnt(self, null);
+	//NetProps.SetPropString(self, "m_iszScriptThinkFunction", "");
 	NetProps.SetPropBool(self, "m_Shared.m_bRageDraining", false);
 	SetShieldState(false);
 	self.TerminateScriptScope();
